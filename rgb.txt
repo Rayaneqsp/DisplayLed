@@ -1,0 +1,119 @@
+#include <stdlib.h>
+#include <stdio.h>       // Inclui a biblioteca para printf
+#include <ctype.h>       // Inclui a biblioteca para toupper
+#include "pico/stdlib.h"
+#include "hardware/i2c.h"
+#include "hardware/gpio.h"
+#include "inc/ssd1306.h"
+#include "inc/font.h"
+
+// Definições de pinos
+#define I2C_PORT i2c1
+#define I2C_SDA 14
+#define I2C_SCL 15
+#define ENDERECO 0x3C
+#define BUTTON_A_PIN 5
+#define BUTTON_B_PIN 6
+#define GREEN_PIN 11
+#define BLUE_PIN 12
+
+// Variáveis globais para controle dos LEDs
+bool green_led_state = false;
+bool blue_led_state = false;
+
+// Declaração global da estrutura do display
+ssd1306_t ssd;
+
+// Função para exibir texto em letras maiúsculas no display
+void display_uppercase_string(ssd1306_t *ssd, const char *str, uint8_t x, uint8_t y) {
+    char uppercase_str[50];
+    int i = 0;
+    while (str[i] != '\0') {
+        uppercase_str[i] = toupper(str[i]);
+        i++;
+    }
+    uppercase_str[i] = '\0'; // Termina a string
+    ssd1306_draw_string(ssd, uppercase_str, x, y);
+}
+
+// Função de debounce para os botões
+void debounce_and_update(uint gpio, uint32_t events) {
+    static absolute_time_t last_time = {0};
+    
+    if (absolute_time_diff_us(last_time, get_absolute_time()) > 200000) {
+        if (gpio == BUTTON_A_PIN) {
+            green_led_state = !green_led_state;
+            gpio_put(GREEN_PIN, green_led_state);
+
+            // Exibe a informação no display
+            ssd1306_fill(&ssd, false); // Limpa o display
+            display_uppercase_string(&ssd, green_led_state ? "LED VERDE LIGADO" : "LED VERDE DESLIGADO", 10, 20);
+            ssd1306_send_data(&ssd);
+
+            // Envia a informação ao Serial Monitor
+            printf("LED Verde %s\n", green_led_state ? "Ligado" : "Desligado");
+        } else if (gpio == BUTTON_B_PIN) {
+            blue_led_state = !blue_led_state;
+            gpio_put(BLUE_PIN, blue_led_state);
+
+            // Exibe a informação no display
+            ssd1306_fill(&ssd, false); // Limpa o display
+            display_uppercase_string(&ssd, blue_led_state ? "LED AZUL LIGADO" : "LED AZUL DESLIGADO", 10, 20);
+            ssd1306_send_data(&ssd);
+
+            // Envia a informação ao Serial Monitor
+            printf("LED Azul %s\n", blue_led_state ? "Ligado" : "Desligado");
+        }
+        last_time = get_absolute_time(); // Atualiza o tempo
+    }
+}
+
+int main()
+{
+    stdio_init_all(); // Inicializa a comunicação serial
+
+    // I2C Initialisation. Using it at 400Khz.
+    i2c_init(I2C_PORT, 400 * 1000);
+
+    gpio_set_function(I2C_SDA, GPIO_FUNC_I2C); // Set the GPIO pin function to I2C
+    gpio_set_function(I2C_SCL, GPIO_FUNC_I2C); // Set the GPIO pin function to I2C
+    gpio_pull_up(I2C_SDA); // Pull up the data line
+    gpio_pull_up(I2C_SCL); // Pull up the clock line
+
+    // Inicializa a estrutura do display
+    ssd1306_init(&ssd, 128, 64, false, ENDERECO, I2C_PORT); // Inicializa o display
+    ssd1306_config(&ssd); // Configura o display
+    ssd1306_send_data(&ssd); // Envia os dados para o display
+
+    // Configura os pinos dos botões e LEDs
+    gpio_init(BUTTON_A_PIN);
+    gpio_init(BUTTON_B_PIN);
+    gpio_init(GREEN_PIN);
+    gpio_init(BLUE_PIN);
+
+    gpio_set_dir(BUTTON_A_PIN, GPIO_IN);
+    gpio_set_dir(BUTTON_B_PIN, GPIO_IN);
+    gpio_set_dir(GREEN_PIN, GPIO_OUT);
+    gpio_set_dir(BLUE_PIN, GPIO_OUT);
+
+    gpio_pull_up(BUTTON_A_PIN); // Habilita pull-up no botão A
+    gpio_pull_up(BUTTON_B_PIN); // Habilita pull-up no botão B
+
+    // Configura interrupções para os botões
+    gpio_set_irq_enabled_with_callback(BUTTON_A_PIN, GPIO_IRQ_EDGE_FALL, true, debounce_and_update);
+    gpio_set_irq_enabled_with_callback(BUTTON_B_PIN, GPIO_IRQ_EDGE_FALL, true, debounce_and_update);
+
+    // Limpa o display. O display inicia com todos os pixels apagados.
+    ssd1306_fill(&ssd, false);
+    ssd1306_send_data(&ssd);
+
+    // Exibe mensagem inicial no display
+    display_uppercase_string(&ssd, "AGUARDANDO...", 10, 20);
+    ssd1306_send_data(&ssd);
+
+    while (true)
+    {
+        // Loop principal
+        sleep_ms(100);
+    }
+}
