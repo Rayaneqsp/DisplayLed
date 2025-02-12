@@ -108,10 +108,6 @@ Este projeto permite o controle de LEDs e a exibição de caracteres e números 
   LED Azul ON
   ```
 
-## Contribuições
-
-Se você encontrar erros ou quiser melhorar o projeto, sinta-se à vontade para abrir uma **issue** ou enviar um **pull request**.
-
 ## Licença
 
 Este projeto está licenciado para estudo e conhecimento.
